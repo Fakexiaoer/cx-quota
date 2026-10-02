@@ -4,6 +4,8 @@ import SwiftUI
 struct ResetCreditCard: View {
     let snapshot: QuotaSnapshot
     let isConsuming: Bool
+    let isRefreshing: Bool
+    let isLoggingIn: Bool
     let onConsume: (ResetCredit?) -> Void
     @State private var selectedCredit: ResetCredit?
     @State private var showsConsumeConfirmation = false
@@ -35,11 +37,16 @@ struct ResetCreditCard: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(!canConsume || isConsuming)
+        .disabled(!canConsume || isConsuming || isRefreshing || isLoggingIn)
         .padding(10)
-        .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 170, maxHeight: 170, alignment: .topLeading)
+        .grayscale(isRefreshing || isLoggingIn ? 1 : 0)
         .background(snapshot.needsReset ? Color.orange.opacity(0.13) : Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.primary.opacity(0.12), lineWidth: 1))
+        .overlay {
+            if isLoggingIn { RefreshOverlay("正在登录") }
+            else if isRefreshing { RefreshOverlay() }
+        }
         .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
         .confirmationDialog("确认使用重置卡？", isPresented: $showsConsumeConfirmation, titleVisibility: .visible) {
             Button("确认重置", role: .destructive) {
@@ -50,6 +57,7 @@ struct ResetCreditCard: View {
         } message: {
             Text(confirmationDetails(for: selectedCredit))
         }
+        .allowsHitTesting(!isRefreshing && !isLoggingIn)
     }
 
     @ViewBuilder

@@ -27,6 +27,18 @@ public enum CXProfileManager {
         }.value
     }
 
+    public static func makeLoginProcess(profile: String) throws -> Process {
+        let directory = try profileDirectory(for: profile)
+        let process = Process()
+        process.executableURL = try codexURL()
+        process.arguments = ["login"]
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
+        process.environment = ProcessInfo.processInfo.environment.merging(["CODEX_HOME": directory.path]) { _, replacement in replacement }
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        return process
+    }
+
     public static func logoutAndRemove(profile: String) async -> Result<Void, CXProfileManagerError> {
         await Task.detached(priority: .userInitiated) {
             do {

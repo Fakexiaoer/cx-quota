@@ -40,6 +40,9 @@ public enum AppServerClient {
     }
 
     static func isTransient(_ error: QuotaError) -> Bool {
+        if isInvalidAuthentication(error) {
+            return false
+        }
         let message: String
         switch error {
         case let .server(value), let .processFailed(value):
@@ -53,8 +56,25 @@ public enum AppServerClient {
             || message.contains("network")
     }
 
-    private static func displayMessage(for error: QuotaError) -> String {
-        isTransient(error) ? "官方额度服务暂时不可用，请稍后刷新" : error.localizedDescription
+    static func displayMessage(for error: QuotaError) -> String {
+        if isInvalidAuthentication(error) {
+            return "登录已失效，请重新登录此账号"
+        }
+        return isTransient(error) ? "官方额度服务暂时不可用，请稍后刷新" : error.localizedDescription
+    }
+
+    private static func isInvalidAuthentication(_ error: QuotaError) -> Bool {
+        let message: String
+        switch error {
+        case let .server(value), let .processFailed(value):
+            message = value.lowercased()
+        default:
+            return false
+        }
+        return message.contains("token_revoked")
+            || message.contains("invalidated oauth token")
+            || message.contains("401 unauthorized")
+            || message.contains("authentication required")
     }
 
     private static func fetchAttempt(profile: CodexProfile, executableURL: URL?) async -> Result<QuotaSnapshot, QuotaError> {

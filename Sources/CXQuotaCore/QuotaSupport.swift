@@ -1,6 +1,21 @@
 import Foundation
 
 public enum QuotaCountdown {
+    public static func timeOfDay(until date: Date?, calendar: Calendar = .current) -> String {
+        guard let date else { return "—" }
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        return String(format: "%02d:%02d", hour, minute)
+    }
+
+    public static func monthDayHour(until date: Date?, calendar: Calendar = .current) -> String {
+        guard let date else { return "—" }
+        let month = calendar.component(.month, from: date)
+        let day = calendar.component(.day, from: date)
+        let hour = calendar.component(.hour, from: date)
+        return "\(month)月\(day)日\(hour)时"
+    }
+
     public static func text(until date: Date?, now: Date = Date()) -> String {
         guard let date else { return "重置时间未提供" }
         let seconds = max(0, Int(date.timeIntervalSince(now)))

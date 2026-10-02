@@ -21,20 +21,26 @@ struct QuotaPopoverView: View {
                                 ResetCreditCard(
                                     snapshot: snapshot,
                                     isConsuming: store.isConsumingReset,
+                                    isRefreshing: store.isRefreshing(for: snapshot.profile),
+                                    isLoggingIn: store.isLoggingIn(for: snapshot.profile),
                                     onConsume: { store.consumeReset(profile: snapshot.profile, credit: $0) }
                                 )
                             } else {
                                 ProfileCard(
                                     snapshot: snapshot,
                                     isRefreshPaused: store.isRefreshPaused(for: snapshot.profile),
+                                    isRefreshing: store.isRefreshing(for: snapshot.profile),
+                                    isLoggingIn: store.isLoggingIn(for: snapshot.profile),
                                     onPauseChange: { store.setRefreshPaused($0, for: snapshot.profile) },
+                                    onRelogin: { store.relogin(profile: snapshot.profile) },
+                                    onCancelLogin: { store.cancelRelogin(profile: snapshot.profile) },
                                     onLogout: { store.logoutAndRemove(profile: snapshot.profile) }
                                 )
                             }
                         }
                     }
                 }
-                .frame(minHeight: 270, maxHeight: 270)
+                .frame(minHeight: 350, maxHeight: 350)
                 .transaction { $0.animation = nil }
             }
             Divider()

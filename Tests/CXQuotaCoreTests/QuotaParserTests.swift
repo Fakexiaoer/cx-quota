@@ -44,6 +44,15 @@ final class QuotaParserTests: XCTestCase {
         XCTAssertEqual(QuotaCountdown.compactText(until: now.addingTimeInterval(3 * 86_400 + 4 * 3_600 + 20 * 60), now: now), "3D 4H")
     }
 
+    func testFormatsResetTimesForQuotaRings() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = calendar.date(from: DateComponents(year: 2026, month: 10, day: 2, hour: 14, minute: 30))!
+
+        XCTAssertEqual(QuotaCountdown.timeOfDay(until: date, calendar: calendar), "14:30")
+        XCTAssertEqual(QuotaCountdown.monthDayHour(until: date, calendar: calendar), "10月2日14时")
+    }
+
     func testRefreshesOnlyAfterAnExhaustedWindowHasReset() {
         let updatedAt = Date(timeIntervalSince1970: 1_000)
         let expiredReset = QuotaWindow(id: "5h", name: "5H 限额", usedPercent: 100, windowDurationMins: 300, resetsAt: Date(timeIntervalSince1970: 1_100))
@@ -67,6 +76,18 @@ final class QuotaParserTests: XCTestCase {
     func testRetriesOnlyTransientUsageTransportFailures() {
         XCTAssertTrue(AppServerClient.isTransient(.server("codex rate limits: error sending request for url (https://chatgpt.com/backend-api/wham/usage)")))
         XCTAssertFalse(AppServerClient.isTransient(.server("authentication required")))
+    }
+
+    func testDoesNotTreatRevokedOAuthTokenAsTransientUsageFailure() {
+        let error = QuotaError.server("failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; code=token_revoked")
+
+        XCTAssertFalse(AppServerClient.isTransient(error))
+        XCTAssertEqual(AppServerClient.displayMessage(for: error), "登录已失效，请重新登录此账号")
+        XCTAssertTrue(QuotaSnapshot(profile: "sample", availability: .failed, errorMessage: AppServerClient.displayMessage(for: error)).requiresRelogin)
+
+        let authenticationRequired = QuotaError.server("codex account authentication required to read rate limits")
+        XCTAssertEqual(AppServerClient.displayMessage(for: authenticationRequired), "登录已失效，请重新登录此账号")
+        XCTAssertTrue(QuotaSnapshot(profile: "sample", availability: .failed, errorMessage: authenticationRequired.localizedDescription).requiresRelogin)
     }
 
     func testValidatesProfileNamesBeforeCreatingAccounts() {

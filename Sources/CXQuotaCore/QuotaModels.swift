@@ -76,6 +76,14 @@ public struct QuotaSnapshot: Codable, Equatable, Identifiable, Sendable {
         resetCreditCount > 0 && resetCredits == nil
     }
 
+    public var requiresRelogin: Bool {
+        guard availability == .failed else { return false }
+        let message = errorMessage?.lowercased() ?? ""
+        return message.contains("重新登录")
+            || message.contains("authentication required")
+            || message.contains("token_revoked")
+    }
+
     public var weeklyWindow: QuotaWindow? {
         windows.first { $0.name == "周限额" }
     }
