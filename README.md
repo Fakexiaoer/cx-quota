@@ -109,3 +109,7 @@ python3 -B -m unittest discover -s cx/tests -p 'test_*.py' -v
 ## 许可证
 
 本项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可证。允许非商业用途的使用、修改和分发；商业使用需要获得版权方的另行书面许可。
+
+## 友链
+
+- [LINUX DO](https://linux.do) — 一个面向技术与开源爱好者的社区。
