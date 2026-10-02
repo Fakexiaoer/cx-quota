@@ -78,3 +78,7 @@ python3 -B -m unittest discover -s cx/tests -p 'test_*.py' -v
 ## 审计
 
 额度查询、缓存刷新、重置卡、账号管理和已知限制记录在 [逻辑审计](docs/logic-audit.md)。
+
+## 许可证
+
+本项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可证。允许非商业用途的使用、修改和分发；商业使用需要获得版权方的另行书面许可。
