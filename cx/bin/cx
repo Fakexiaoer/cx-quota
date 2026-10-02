@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# Manual Codex CLI profile launcher. It never reads authentication files.
+
+set -euo pipefail
+
+readonly CX_PROFILES_ROOT="${HOME:?HOME must be set}/.codex-profiles"
+readonly CX_PROFILE_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+
+die() {
+  printf 'cx: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  cx init <profile>
+  cx login <profile> [--] [codex-login-args...]
+  cx <profile> [--] [codex-args...]
+  cx list
+  cx path <profile>
+  cx plugins sync <profile|--all> [--apply]
+
+Profiles are private directories below ~/.codex-profiles.
+Plugin sync previews by default. --all --apply also enables sync on launch/init.
+Backups and rollback: system-control/docs/cx-shared-plugins.md
+EOF
+}
+
+validate_profile_name() {
+  [[ "$1" =~ $CX_PROFILE_PATTERN ]] || die "invalid profile name: $1"
+}
+
+profile_path() {
+  validate_profile_name "$1"
+  printf '%s/%s\n' "$CX_PROFILES_ROOT" "$1"
+}
+
+assert_private_directory() {
+  local directory="$1"
+  local mode
+
+  [[ ! -L "$directory" ]] || die "refusing symbolic-link directory: $directory"
+  [[ -d "$directory" ]] || die "not a directory: $directory"
+  [[ -O "$directory" ]] || die "directory is not owned by the current user: $directory"
+
+  mode="$(stat -f '%OLp' "$directory")"
+  [[ "$mode" =~ ^[0-7][0-7][0-7]$ ]] || die "cannot determine permissions: $directory"
+  [[ "${mode:1:1}" == '0' && "${mode:2:1}" == '0' ]] || die "directory must be private: $directory (mode $mode)"
+}
+
+ensure_profiles_root() {
+  if [[ -e "$CX_PROFILES_ROOT" || -L "$CX_PROFILES_ROOT" ]]; then
+    assert_private_directory "$CX_PROFILES_ROOT"
+  else
+    (umask 077 && mkdir -m 700 "$CX_PROFILES_ROOT") || die 'could not create profile root'
+  fi
+}
+
+require_profile() {
+  local directory
+  ensure_profiles_root
+  directory="$(profile_path "$1")"
+  assert_private_directory "$directory"
+  printf '%s\n' "$directory"
+}
+
+codex_binary() {
+  local binary
+  binary="$(command -v codex || true)"
+  [[ -n "$binary" && "$binary" == /* && -x "$binary" ]] || die 'official codex executable was not found on PATH'
+  printf '%s\n' "$binary"
+}
+
+sync_plugins() {
+  local source="${BASH_SOURCE[0]}"
+  local directory
+  command -v python3 >/dev/null 2>&1 || die 'plugin sync requires Python 3.11+'
+  while [[ -L "$source" ]]; do
+    directory="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    [[ "$source" == /* ]] || source="$directory/$source"
+  done
+  directory="$(cd -P "$(dirname "$source")/.." && pwd)"
+  python3 "$directory/scripts/cx_shared_plugins.py" "$@"
+}
+
+sync_plugins_if_enabled() {
+  if [[ -f "$CX_PROFILES_ROOT/.cx-shared-plugins" ]]; then
+    sync_plugins "$1" --apply --quiet
+  fi
+}
+
+init_profile() {
+  local directory
+  validate_profile_name "$1"
+  ensure_profiles_root
+  directory="$(profile_path "$1")"
+  [[ ! -e "$directory" && ! -L "$directory" ]] || die "profile already exists: $1"
+  (umask 077 && mkdir -m 700 "$directory") || die "could not create profile: $1"
+  printf 'Created profile %s at %s\n' "$1" "$directory"
+  sync_plugins_if_enabled "$1"
+}
+
+list_profiles() {
+  local directory
+  [[ -e "$CX_PROFILES_ROOT" || -L "$CX_PROFILES_ROOT" ]] || return 0
+  assert_private_directory "$CX_PROFILES_ROOT"
+  for directory in "$CX_PROFILES_ROOT"/*; do
+    [[ -d "$directory" && ! -L "$directory" ]] || continue
+    printf '%s\n' "${directory##*/}"
+  done | LC_ALL=C sort
+}
+
+main() {
+  local command="${1:-}"
+  local directory
+  local binary
+
+  case "$command" in
+    ''|help|-h|--help) usage ;;
+    init)
+      [[ $# -eq 2 ]] || die 'usage: cx init <profile>'
+      init_profile "$2"
+      ;;
+    login)
+      [[ $# -ge 2 ]] || die 'usage: cx login <profile> [--] [codex-login-args...]'
+      directory="$(require_profile "$2")"
+      shift 2
+      [[ "${1:-}" != '--' ]] || shift
+      binary="$(codex_binary)"
+      exec env CODEX_HOME="$directory" "$binary" login "$@"
+      ;;
+    list)
+      [[ $# -eq 1 ]] || die 'usage: cx list'
+      list_profiles
+      ;;
+    path)
+      [[ $# -eq 2 ]] || die 'usage: cx path <profile>'
+      require_profile "$2"
+      ;;
+    plugins)
+      [[ "${2:-}" == 'sync' ]] || die 'usage: cx plugins sync <profile|--all> [--apply]'
+      shift 2
+      sync_plugins "$@"
+      ;;
+    *)
+      directory="$(require_profile "$command")"
+      sync_plugins_if_enabled "$command"
+      shift
+      [[ "${1:-}" != '--' ]] || shift
+      binary="$(codex_binary)"
+      exec env CODEX_HOME="$directory" "$binary" --no-alt-screen "$@"
+      ;;
+  esac
+}
+
+main "$@"
